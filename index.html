@@ -5,65 +5,228 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Not Boring Weather</title>
     <style>
-        :root { --accent: #ff3333; --bg: #f5f5f7; --card: #ffffff; --bg-1: #fbfbfc; --bg-2: #f3f4f6; --bg-3: #eef0f2; --bg-shift-x: 0%; --bg-shift-y: 0%; --vignette-opacity: 0.03; }
-        body { margin: 0; overflow: hidden; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; color: #1d1d1f; user-select: none; -webkit-font-smoothing: antialiased; font-weight: 300; }
-
-        #canvas-container { width: 100vw; height: 100vh; position: absolute; z-index: 1; }
-
-        /* UI */
-        #ui { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; display: flex; flex-direction: column; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
-        .top-bar { padding: 70px 30px 0; display: flex; flex-direction: column; align-items: center; }
-        .city { letter-spacing: 8px; font-size: 14px; font-weight: 600; opacity: 0.5; text-transform: uppercase; }
-        .clock { font-size: 48px; font-weight: 400; margin-top: 8px; letter-spacing: -1px; }
-
-        /* Forecast - Compact Line from Video */
-        .forecast-wrapper {
-            margin-top: auto; padding-bottom: 50px; pointer-events: auto;
-            overflow-x: auto; white-space: nowrap; width: 100%;
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1f;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+            color: #ffffff;
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+            touch-action: pan-y;
         }
-        .forecast-wrapper::-webkit-scrollbar { height: 3px; }
-        .forecast-wrapper::-webkit-scrollbar-track { background: transparent; }
-        .forecast-wrapper::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.06); border-radius: 2px; }
-        .forecast-inner { display: inline-flex; padding: 0 30vw; gap: 18px; align-items: flex-end; }
-        .f-item { width: 64px; display: inline-flex; flex-direction: column; align-items: center; text-align: center; opacity: 0.28; transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; padding: 6px 4px; }
-        .f-item.active { opacity: 1; color: #1d1d1f; }
-        .f-item.active::after { content: ''; display: block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin: 8px auto 0; }
-        .f-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
-        .f-icon img { width: 100%; height: 100%; object-fit: contain; opacity: 0.95; }
-        .f-time { font-size: 10px; font-weight: 300; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.6px; opacity: 0.6; }
-        .f-temp { font-size: 15px; font-weight: 300; letter-spacing: -0.4px; }
 
-        /* Background Gradient (dynamic via CSS variables) */
-        #bg-gradient {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
-            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
-            background-size: cover;
-            background-attachment: fixed;
-            transition: all 1.4s ease;
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
         }
-        /* Soft vignette to ease the eyes */
-        #bg-gradient::after {
+
+        #ui {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .top-bar {
+            padding: 60px 30px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .city {
+            letter-spacing: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0.6;
+            text-transform: uppercase;
+        }
+
+        /* Forecast Bar Container */
+        .forecast-container {
+            margin-top: auto;
+            padding-bottom: 30px;
+            pointer-events: auto;
+            position: relative;
+        }
+        
+        /* Mode indicator */
+        .mode-indicator {
+            text-align: center;
+            font-size: 11px;
+            letter-spacing: 1px;
+            opacity: 0.5;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        
+        /* The scrubbing bar */
+        .scrub-bar {
+            position: relative;
+            height: 100px;
+            margin: 0 20px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            overflow: hidden;
+            touch-action: none;
+            cursor: grab;
+        }
+        
+        .scrub-bar:active {
+            cursor: grabbing;
+        }
+        
+        /* Background gradient based on time of day */
+        .scrub-background {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+        
+        /* The items track (all items laid out) */
+        .scrub-track {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            display: flex;
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        /* Individual forecast item in track */
+        .scrub-item {
+            flex-shrink: 0;
+            width: 60px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            opacity: 0.3;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            position: relative;
+        }
+        
+        .scrub-item.near-center {
+            opacity: 0.6;
+        }
+        
+        .scrub-item.active {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        
+        .scrub-time {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        
+        .scrub-icon {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .scrub-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .scrub-temp {
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: -0.5px;
+        }
+        
+        .scrub-item.active .scrub-temp {
+            font-weight: 600;
+            font-size: 17px;
+        }
+        
+        /* Rain indicator */
+        .scrub-rain {
+            font-size: 9px;
+            color: #4a9eff;
+            opacity: 0.8;
+        }
+        
+        /* Center indicator line */
+        .center-indicator {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.5);
+            transform: translateX(-50%);
+            z-index: 3;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        
+        .center-indicator::before {
             content: '';
-            position: absolute; inset: 0; pointer-events: none;
-            background: radial-gradient(circle at 50% 80%, rgba(0,0,0,var(--vignette-opacity,0.03)), rgba(0,0,0,calc(var(--vignette-opacity,0.03) * 2)) 40%, rgba(0,0,0,0) 60%);
-            transition: opacity 1s ease, background 1s ease;
-            mix-blend-mode: multiply;
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            background: #4a9eff;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(74, 158, 255, 0.8);
+        }
+        
+        /* Swipe hint */
+        .swipe-hint {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            opacity: 0.4;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            animation: fadeInOut 3s ease-in-out infinite;
+        }
+        
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
-
-    <div id="bg-gradient"></div>
-
     <div id="ui">
         <div class="top-bar">
-            <div class="city" id="city-name">STOCKHOLM</div>
-            <div class="clock" id="time-display">16:49</div>
+            <div class="city" id="city-name">GRÖDINGE</div>
         </div>
 
-        <div class="forecast-wrapper">
-            <div class="forecast-inner" id="forecast-row"></div>
+        <div class="forecast-container">
+            <div class="mode-indicator" id="mode-indicator">HOURLY</div>
+            <div class="scrub-bar" id="scrub-bar">
+                <canvas class="scrub-background" id="scrub-bg"></canvas>
+                <div class="scrub-track" id="scrub-track"></div>
+                <div class="center-indicator"></div>
+                <div class="swipe-hint">↕ swipe to change mode</div>
+            </div>
         </div>
     </div>
 
@@ -76,366 +239,545 @@
     <script>
         const API_KEY = 'dd6a890cc06c02cacd3ad1ec55e98bc6';
         let scene, camera, renderer, mainGroup;
-        let isDragging = false, lastInt = Date.now();
+        let isDragging = false, lastInteraction = Date.now();
         let currentZoom = 1;
-        let forecastHourly = [];
+        let forecastData = { hourly: [], daily: [] };
+        let currentMode = 'hourly';
+        let myFont = null;
 
-        // Material for clean 3D text and weather elements with rough texture
-        function getWeatherMat() {
-            // Create grainy/rough texture canvas
+        // Enhanced sound system
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        
+        const sounds = {
+            tap: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = 800;
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.1);
+            },
+            swipe: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.15);
+            },
+            toggle: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.08);
+            }
+        };
+        
+        function playSound(soundName) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            if (sounds[soundName]) {
+                try {
+                    sounds[soundName]();
+                } catch (e) {
+                    console.log('Sound error:', e);
+                }
+            }
+        }
+
+        // Create grainy material
+        function createGrainyMaterial() {
             const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 256;
+            canvas.width = 512;
+            canvas.height = 512;
             const ctx = canvas.getContext('2d');
             
-            // Black background
-            ctx.fillStyle = '#5a5a5e';
-            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillStyle = '#3a3a40';
+            ctx.fillRect(0, 0, 512, 512);
             
-            // Add grainy noise texture
-            const imageData = ctx.getImageData(0, 0, 256, 256);
+            const imageData = ctx.getImageData(0, 0, 512, 512);
             const data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
-                const noise = Math.random() * 40;
-                data[i] = Math.max(60, 90 - noise);      // R
-                data[i + 1] = Math.max(60, 90 - noise);  // G
-                data[i + 2] = Math.max(60, 94 - noise);  // B
-                data[i + 3] = 255;                       // A
+                const noise = (Math.random() - 0.5) * 35;
+                data[i] = Math.max(0, Math.min(255, 58 + noise));
+                data[i + 1] = Math.max(0, Math.min(255, 58 + noise));
+                data[i + 2] = Math.max(0, Math.min(255, 64 + noise));
+                data[i + 3] = 255;
             }
             ctx.putImageData(imageData, 0, 0);
             
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.magFilter = THREE.LinearFilter;
-            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
             
             return new THREE.MeshStandardMaterial({
-                map: tex,
-                bumpMap: tex,
-                bumpScale: 0.6,
-                roughness: 0.9,
-                metalness: 0.0,
-                color: 0x5a5a5e
+                map: texture,
+                roughness: 0.95,
+                metalness: 0.05,
+                bumpMap: texture,
+                bumpScale: 0.4,
+                color: 0x3a3a40
             });
         }
 
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 1000);
-            camera.position.set(0, 0, 50);
+            camera.position.set(0, 0, 65);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            // Professional lighting for clean 3D visualization
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const light = new THREE.DirectionalLight(0xffffff, 1.0);
-            light.position.set(15, 25, 20);
-            light.castShadow = true;
-            scene.add(light);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
             
-            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            fillLight.position.set(-10, -15, 10);
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            mainLight.position.set(10, 20, 15);
+            mainLight.castShadow = true;
+            scene.add(mainLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.4);
+            fillLight.position.set(-15, -10, 10);
             scene.add(fillLight);
+            
+            const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            rimLight.position.set(-5, 5, -10);
+            scene.add(rimLight);
 
             mainGroup = new THREE.Group();
             scene.add(mainGroup);
 
             setupEvents();
             
-            new THREE.FontLoader().load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', f => {
-                window.myFont = f;
-                // Now fetch data AFTER font is loaded
-                fetchData();
-                animate();
-                animateBackgroundLoop();
-                // Set initial colorful background before API loads
-                setDynamicBackground('Clear', Math.floor(Date.now() / 1000), 0, false);
-            });
-        }
-
-        async function fetchWeatherByCoords(lat, lon) {
-            // Current weather using coordinates
-            try {
-                const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
-                const data = await res.json();
-                document.getElementById('city-name').innerText = data.name.toUpperCase();
-                drawWeather(data.weather[0].main, Math.round(data.main.temp));
-
-                // Fetch hourly forecast using One Call (by lat/lon)
-                const onecall = await fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,daily,alerts&units=metric&appid=${API_KEY}`);
-                const fc = await onecall.json();
-                forecastHourly = (fc.hourly || []).slice(0, 24);
-                buildForecast(forecastHourly);
-                // Set dynamic background using One Call current conditions
-                if(fc.current && fc.current.weather && fc.current.weather[0]) {
-                    setDynamicBackground(fc.current.weather[0].main, fc.current.dt, fc.timezone_offset);
-                } else if(forecastHourly.length) {
-                    setDynamicBackground(forecastHourly[0].weather[0].main, forecastHourly[0].dt, fc.timezone_offset);
+            new THREE.FontLoader().load(
+                'https://threejs.org/examples/fonts/helvetiker_bold.typeface.json',
+                font => {
+                    myFont = font;
+                    fetchData();
+                    animate();
                 }
-            } catch (err) {
-                console.error('Weather fetch error', err);
-            }
+            );
         }
 
         async function fetchData() {
-            // Try to get user's location, fallback to Stockholm
-            if (navigator.geolocation) {
+            try {
                 navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        fetchWeatherByCoords(lat, lon);
-                    },
-                    (error) => {
-                        console.log('Geolocation denied, using Stockholm fallback');
-                        fetchWeatherByCoords(59.3293, 18.0686);
-                    }
+                    pos => fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude),
+                    () => fetchWeatherByCoords(59.1936, 17.3654)
                 );
-            } else {
-                // Fallback for browsers without geolocation support
-                fetchWeatherByCoords(59.3293, 18.0686);
+            } catch (e) {
+                fetchWeatherByCoords(59.1936, 17.3654);
             }
         }
 
-        function drawWeather(type, temp) {
-            while(mainGroup.children.length > 0) mainGroup.remove(mainGroup.children[0]);
-            if(!window.myFont) return;
+        async function fetchWeatherByCoords(lat, lon) {
+            try {
+                const current = await fetch(
+                    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=sv`
+                ).then(r => r.json());
+                
+                const oneCall = await fetch(
+                    `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=sv&exclude=minutely,alerts`
+                ).then(r => r.json());
 
-            const mat = getWeatherMat();
-            
-            // Cloud at top
-            const cloud = new THREE.Group();
-            const geo = new THREE.SphereGeometry(2.5, 32, 32);
-            [[0,0,0,1.3], [-3.2,-0.4,0.6,0.95], [3.2,0.3,-0.6,1.05]].forEach(p => {
-                const m = new THREE.Mesh(geo, mat);
-                m.position.set(p[0], p[1], p[2]); 
-                m.scale.set(p[3], p[3], p[3]);
-                cloud.add(m);
-            });
-            cloud.position.y = 12;
-            mainGroup.add(cloud);
-
-            // Temperature number in middle - thin weight
-            const tGeo = new THREE.TextGeometry(temp + "°", { 
-                font: window.myFont, 
-                size: 11, 
-                height: 1.8, 
-                bevelEnabled: false,
-                curveSegments: 16
-            });
-            tGeo.center();
-            const text = new THREE.Mesh(tGeo, mat);
-            text.position.y = 0;
-            mainGroup.add(text);
-
-            // Weather condition text at bottom - thin
-            const wGeo = new THREE.TextGeometry(type.toUpperCase(), { 
-                font: window.myFont, 
-                size: 2.8, 
-                height: 1.2,
-                bevelEnabled: false,
-                curveSegments: 12
-            });
-            wGeo.center();
-            const wText = new THREE.Mesh(wGeo, mat);
-            wText.position.y = -12;
-            mainGroup.add(wText);
-        }
-
-        // ---------- Dynamic background helpers ----------
-        function hexToRgb(hex) {
-            const h = hex.replace('#','');
-            return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)];
-        }
-
-        function rgbToHex(r,g,b) {
-            return '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
-        }
-
-        function lerp(a,b,t) { return a + (b-a) * t; }
-
-        function mixGradient(c1, c2, t) {
-            const a = hexToRgb(c1), b = hexToRgb(c2);
-            return rgbToHex(lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t));
-        }
-
-        function setDynamicBackground(condition, timestamp, tzOffset, smooth = true) {
-            // tzOffset in seconds
-            const local = new Date((timestamp + (tzOffset||0)) * 1000);
-            const hour = local.getUTCHours();
-            const isDay = hour >= 6 && hour < 19;
-
-            // Map basic conditions to palettes - RICH DAY, DARK NIGHT
-            const palettes = {
-                Clear: isDay ? ['#ffd966', '#ffb347'] : ['#0f1920', '#1a2a3a'],
-                Clouds: isDay ? ['#b8d4f1', '#a8c8e1'] : ['#1a2a3a', '#2a3a4a'],
-                Rain: isDay ? ['#9ecbf0', '#7fb3e0'] : ['#0f1f2f', '#1a2f3f'],
-                Drizzle: isDay ? ['#b0d9ff', '#90ccff'] : ['#1a3050', '#2a4060'],
-                Thunderstorm: isDay ? ['#9ba8d8', '#7a8bc8'] : ['#050a15', '#151f2a'],
-                Snow: isDay ? ['#d4e8ff', '#c4deff'] : ['#1a2a40', '#2a3a50'],
-                Mist: isDay ? ['#c0d8f0', '#b0cce0'] : ['#2a3a50', '#3a4a60'],
-                Smoke: isDay ? ['#d4c4b0', '#c0b0a0'] : ['#1a1a20', '#2a2a30']
-            };
-
-            const key = palettes[condition] ? condition : 'Clouds';
-            const p = palettes[key];
-
-            const colorA = p[0];
-            const colorB = p[1] || p[0];
-
-            // Use smooth transition for color change
-            transitionBackground(colorA, colorB, 1400);
-            // Stronger vignette at night for mood
-            document.documentElement.style.setProperty('--vignette-opacity', isDay ? '0.01' : '0.12');
-        }
-
-        // Smoothly tween between current CSS gradient colors and target colors
-        let _bgTween = null;
-        function transitionBackground(targetA, targetB, duration = 1200) {
-            if(_bgTween && _bgTween.cancel) _bgTween.cancel();
-            const root = document.documentElement;
-            const computed = getComputedStyle(root);
-            const fromA = (computed.getPropertyValue('--bg-1') || '#fbfbfc').trim();
-            const fromB = (computed.getPropertyValue('--bg-2') || '#f3f4f6').trim();
-
-            let start = null;
-            let raf = null;
-            _bgTween = {
-                cancel() { if(raf) cancelAnimationFrame(raf); _bgTween = null; }
-            };
-
-            function step(now) {
-                if(!start) start = now;
-                const t = Math.min(1, (now - start) / duration);
-                // parse and lerp
-                const a1 = hexToRgb(fromA), b1 = hexToRgb(targetA);
-                const a2 = hexToRgb(fromB), b2 = hexToRgb(targetB);
-                const curA = rgbToHex(lerp(a1[0], b1[0], t), lerp(a1[1], b1[1], t), lerp(a1[2], b1[2], t));
-                const curB = rgbToHex(lerp(a2[0], b2[0], t), lerp(a2[1], b2[1], t), lerp(a2[2], b2[2], t));
-                root.style.setProperty('--bg-1', curA);
-                root.style.setProperty('--bg-2', curB);
-                if(t < 1) raf = requestAnimationFrame(step);
-                else _bgTween = null;
-            }
-            raf = requestAnimationFrame(step);
-            return _bgTween;
-        }
-
-        // Continuous subtle motion of background position to feel alive
-        let _bgLoopRunning = false;
-        function animateBackgroundLoop() {
-            if(_bgLoopRunning) return;
-            _bgLoopRunning = true;
-            const el = document.getElementById('bg-gradient');
-            let start = performance.now();
-            function loop(now) {
-                const t = (now - start) / 1000;
-                const x = 50 + Math.sin(t * 0.06) * 8; // slow horizontal sway
-                const y = 50 + Math.cos(t * 0.04) * 4; // slow vertical bob
-                el.style.backgroundPosition = `${x}% ${y}%`;
-                requestAnimationFrame(loop);
-            }
-            requestAnimationFrame(loop);
-        }
-
-        function buildForecast(hourly) {
-            const row = document.getElementById('forecast-row');
-            row.innerHTML = "";
-            if(!hourly || !hourly.length) return;
-            hourly.forEach((h, i) => {
-                const item = document.createElement('div');
-                item.className = `f-item ${i===0 ? 'active' : ''}`;
-                const date = new Date(h.dt * 1000);
-                const displayHour = String(date.getHours()).padStart(2, '0');
-                const temp = Math.round(h.temp);
-                const icon = h.weather && h.weather[0] ? h.weather[0].icon : '';
-                item.innerHTML = `
-                    <div class="f-icon"><img src="https://openweathermap.org/img/wn/${icon}.png" alt=""/></div>
-                    <div class="f-time">${displayHour}:00</div>
-                    <div class="f-temp">${temp}°</div>
-                `;
-                item.onclick = () => {
-                    document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active'));
-                    item.classList.add('active');
-                    // show that hour's condition on main view
-                    if(h.weather && h.weather[0]) {
-                        drawWeather(h.weather[0].main, temp);
+                if (current && current.main) {
+                    document.getElementById('city-name').textContent = current.name.toUpperCase();
+                    
+                    const temp = Math.round(current.main.temp);
+                    const condition = current.weather[0].main;
+                    drawWeather(condition, temp);
+                    
+                    if (oneCall) {
+                        forecastData.hourly = oneCall.hourly ? oneCall.hourly.slice(0, 24) : [];
+                        forecastData.daily = oneCall.daily ? oneCall.daily.slice(0, 7) : [];
+                        buildForecastBar(currentMode);
                     }
-                };
-                row.appendChild(item);
-            });
+                }
+            } catch (e) {
+                console.error('Weather error:', e);
+                const fallback = { dt: Date.now()/1000, temp: -2, weather: [{icon: '04n', main: 'Clouds'}] };
+                forecastData.hourly = [fallback];
+                forecastData.daily = [fallback];
+                drawWeather('Clouds', -2);
+                buildForecastBar('hourly');
+            }
         }
 
-        function updateClock() {
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            document.getElementById('time-display').innerText = `${hours}:${minutes}`;
+        function drawWeather(condition, temp) {
+            while(mainGroup.children.length > 0) {
+                mainGroup.remove(mainGroup.children[0]);
+            }
+            
+            if (!myFont) return;
+            
+            const material = createGrainyMaterial();
+            
+            const cloud = createCloud(material);
+            cloud.position.set(0, 5, 0);
+            mainGroup.add(cloud);
+            
+            const tempGeometry = new THREE.TextGeometry(temp.toString(), {
+                font: myFont,
+                size: 14,
+                height: 3,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.3,
+                bevelSize: 0.2,
+                bevelSegments: 5
+            });
+            tempGeometry.center();
+            const tempMesh = new THREE.Mesh(tempGeometry, material);
+            tempMesh.position.set(0, -8, 0);
+            tempMesh.castShadow = true;
+            mainGroup.add(tempMesh);
+            
+            const degreeGeometry = new THREE.TextGeometry('°', {
+                font: myFont,
+                size: 6,
+                height: 2,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.2,
+                bevelSize: 0.1,
+                bevelSegments: 5
+            });
+            const degreeMesh = new THREE.Mesh(degreeGeometry, material);
+            degreeMesh.position.set(10, -5, 0);
+            degreeMesh.castShadow = true;
+            mainGroup.add(degreeMesh);
+            
+            const conditionGeometry = new THREE.TextGeometry(condition.toUpperCase(), {
+                font: myFont,
+                size: 4,
+                height: 1.5,
+                curveSegments: 8,
+                bevelEnabled: true,
+                bevelThickness: 0.15,
+                bevelSize: 0.1,
+                bevelSegments: 3
+            });
+            conditionGeometry.center();
+            const conditionMesh = new THREE.Mesh(conditionGeometry, material);
+            conditionMesh.position.set(0, -18, 0);
+            conditionMesh.castShadow = true;
+            mainGroup.add(conditionMesh);
         }
+
+        function createCloud(material) {
+            const group = new THREE.Group();
+            
+            const positions = [
+                { x: 0, y: 0, z: 0, r: 5 },
+                { x: -4.5, y: 0, z: -1, r: 4 },
+                { x: 4.5, y: 0, z: -1, r: 4 },
+                { x: -2, y: 3, z: 0, r: 3.5 },
+                { x: 2, y: 3, z: 0, r: 3.5 },
+                { x: -6, y: -1, z: 1, r: 2 },
+                { x: 6, y: -1, z: 1, r: 2 }
+            ];
+            
+            positions.forEach(pos => {
+                const sphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(pos.r, 32, 32),
+                    material
+                );
+                sphere.position.set(pos.x, pos.y, pos.z);
+                sphere.castShadow = true;
+                group.add(sphere);
+            });
+            
+            return group;
+        }
+
+        function buildForecastBar(mode) {
+            currentMode = mode;
+            document.getElementById('mode-indicator').textContent = mode.toUpperCase();
+            
+            const track = document.getElementById('scrub-track');
+            const bar = document.getElementById('scrub-bar');
+            const bgCanvas = document.getElementById('scrub-bg');
+            
+            track.innerHTML = '';
+            
+            const data = mode === 'hourly' ? forecastData.hourly : forecastData.daily;
+            if (!data || !data.length) return;
+            
+            // Setup background canvas
+            bgCanvas.width = bar.offsetWidth;
+            bgCanvas.height = bar.offsetHeight;
+            const ctx = bgCanvas.getContext('2d');
+            
+            // Draw gradient based on time of day
+            const gradient = ctx.createLinearGradient(0, 0, bgCanvas.width, 0);
+            data.forEach((item, i) => {
+                const date = new Date(item.dt * 1000);
+                const hour = date.getHours();
+                const position = i / Math.max(data.length - 1, 1);
+                
+                let color;
+                if (hour >= 6 && hour < 8) {
+                    color = `rgba(255, 150, 100, 0.2)`;
+                } else if (hour >= 8 && hour < 18) {
+                    color = `rgba(100, 150, 255, 0.15)`;
+                } else if (hour >= 18 && hour < 20) {
+                    color = `rgba(200, 100, 255, 0.2)`;
+                } else {
+                    color = `rgba(50, 50, 100, 0.25)`;
+                }
+                
+                gradient.addColorStop(position, color);
+            });
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            
+            // Build all forecast items
+            const itemWidth = 60;
+            const totalWidth = data.length * itemWidth;
+            track.style.width = `${totalWidth}px`;
+            
+            data.forEach((item, i) => {
+                const el = document.createElement('div');
+                el.className = 'scrub-item';
+                el.dataset.index = i;
+                
+                const date = new Date(item.dt * 1000);
+                let timeLabel;
+                
+                if (mode === 'hourly') {
+                    timeLabel = String(date.getHours()).padStart(2, '0') + ':00';
+                } else {
+                    timeLabel = date.toLocaleDateString('sv-SE', { weekday: 'short' }).toUpperCase();
+                }
+                
+                const temp = item.temp ? (typeof item.temp === 'number' ? Math.round(item.temp) : Math.round(item.temp.day)) : 0;
+                const icon = item.weather && item.weather[0] ? item.weather[0].icon : '01d';
+                const pop = item.pop ? Math.round(item.pop * 100) : 0;
+                
+                el.innerHTML = `
+                    <div class="scrub-time">${timeLabel}</div>
+                    <div class="scrub-icon">
+                        <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt=""/>
+                    </div>
+                    <div class="scrub-temp">${temp}°</div>
+                    ${pop > 0 ? `<div class="scrub-rain">${pop}%</div>` : ''}
+                `;
+                
+                track.appendChild(el);
+            });
+            
+            // Initialize scrubbing
+            let currentPosition = 0;
+            updateScrubPosition(0);
+            
+            // Scrubbing interaction
+            let isScrubbing = false;
+            let scrubStartX = 0;
+            let scrubStartPosition = 0;
+            
+            function updateScrubPosition(offsetX) {
+                const barWidth = bar.offsetWidth;
+                const centerOffset = barWidth / 2;
+                
+                // Calculate scroll position
+                const scrollPosition = -offsetX + centerOffset;
+                track.style.transform = `translateX(${scrollPosition}px)`;
+                
+                // Find which item is at center
+                const centerX = -scrollPosition + centerOffset;
+                const centerIndex = Math.max(0, Math.min(data.length - 1, Math.round(centerX / itemWidth)));
+                
+                // Update active states
+                const items = track.querySelectorAll('.scrub-item');
+                items.forEach((item, i) => {
+                    const distance = Math.abs(i - centerIndex);
+                    item.classList.remove('active', 'near-center');
+                    
+                    if (i === centerIndex) {
+                        item.classList.add('active');
+                        
+                        // Update 3D scene
+                        const itemData = data[i];
+                        if (itemData) {
+                            const temp = itemData.temp ? (typeof itemData.temp === 'number' ? Math.round(itemData.temp) : Math.round(itemData.temp.day)) : 0;
+                            const condition = itemData.weather && itemData.weather[0] ? itemData.weather[0].main : 'Clear';
+                            drawWeather(condition, temp);
+                        }
+                    } else if (distance === 1) {
+                        item.classList.add('near-center');
+                    }
+                });
+                
+                currentPosition = offsetX;
+            }
+            
+            function handleScrubStart(clientX) {
+                isScrubbing = true;
+                bar.style.cursor = 'grabbing';
+                scrubStartX = clientX;
+                scrubStartPosition = currentPosition;
+                playSound('tap');
+            }
+            
+            function handleScrubMove(clientX) {
+                if (!isScrubbing) return;
+                const deltaX = clientX - scrubStartX;
+                const newPosition = scrubStartPosition + deltaX;
+                
+                // Constrain position
+                const maxPosition = totalWidth - bar.offsetWidth / 2;
+                const minPosition = -bar.offsetWidth / 2;
+                const constrainedPosition = Math.max(minPosition, Math.min(maxPosition, newPosition));
+                
+                updateScrubPosition(constrainedPosition);
+                
+                // Play scrub sound occasionally
+                if (Math.abs(deltaX) % 20 < 2) {
+                    playSound('swipe');
+                }
+            }
+            
+            function handleScrubEnd() {
+                if (isScrubbing) {
+                    isScrubbing = false;
+                    bar.style.cursor = 'grab';
+                }
+            }
+            
+            // Mouse events
+            bar.addEventListener('mousedown', (e) => handleScrubStart(e.clientX));
+            window.addEventListener('mousemove', (e) => handleScrubMove(e.clientX));
+            window.addEventListener('mouseup', handleScrubEnd);
+            
+            // Touch events for scrubbing
+            bar.addEventListener('touchstart', (e) => {
+                handleScrubStart(e.touches[0].clientX);
+            }, { passive: true });
+            
+            bar.addEventListener('touchmove', (e) => {
+                handleScrubMove(e.touches[0].clientX);
+            }, { passive: true });
+            
+            bar.addEventListener('touchend', handleScrubEnd, { passive: true });
+        }
+
+        // Vertical swipe to change modes
+        let verticalSwipeStartY = 0;
+        let verticalSwipeStartX = 0;
+        const forecastContainer = document.querySelector('.forecast-container');
+        
+        forecastContainer.addEventListener('touchstart', (e) => {
+            verticalSwipeStartY = e.touches[0].clientY;
+            verticalSwipeStartX = e.touches[0].clientX;
+        }, { passive: true });
+        
+        forecastContainer.addEventListener('touchend', (e) => {
+            const deltaY = e.changedTouches[0].clientY - verticalSwipeStartY;
+            const deltaX = Math.abs(e.changedTouches[0].clientX - verticalSwipeStartX);
+            
+            // Only trigger if vertical swipe is dominant
+            if (Math.abs(deltaY) > 50 && deltaX < 30) {
+                playSound('toggle');
+                
+                if (deltaY < 0) {
+                    // Swipe up - go to hourly
+                    if (currentMode !== 'hourly') {
+                        buildForecastBar('hourly');
+                    }
+                } else {
+                    // Swipe down - go to daily
+                    if (currentMode !== 'daily') {
+                        buildForecastBar('daily');
+                    }
+                }
+            }
+        }, { passive: true });
 
         function animate() {
             requestAnimationFrame(animate);
-            updateClock();
-            if(!isDragging && Date.now() - lastInt > 2000) {
-                mainGroup.rotation.y *= 0.99;
+            
+            if (!isDragging && Date.now() - lastInteraction > 2000) {
+                mainGroup.rotation.y += 0.001;
                 mainGroup.rotation.x *= 0.99;
             }
+            
             renderer.render(scene, camera);
         }
 
         function setupEvents() {
             let prev = { x: 0, y: 0 };
             const container = document.getElementById('canvas-container');
-            const start = (x, y) => { isDragging = true; prev = { x, y }; };
+            
+            const start = (x, y) => {
+                isDragging = true;
+                prev = { x, y };
+            };
+            
             const move = (x, y) => {
-                if(!isDragging) return;
+                if (!isDragging) return;
                 mainGroup.rotation.y += (x - prev.x) * 0.01;
                 mainGroup.rotation.x += (y - prev.y) * 0.01;
+                mainGroup.rotation.x = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, mainGroup.rotation.x));
                 prev = { x, y };
-                lastInt = Date.now();
+                lastInteraction = Date.now();
             };
+            
             container.addEventListener('mousedown', e => start(e.clientX, e.clientY));
             window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
             window.addEventListener('mouseup', () => isDragging = false);
-            container.addEventListener('touchstart', e => start(e.touches[0].clientX, e.touches[0].clientY));
-            container.addEventListener('touchmove', e => move(e.touches[0].clientX, e.touches[0].clientY));
+            
+            container.addEventListener('touchstart', e => {
+                if (e.touches.length === 1) {
+                    start(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            });
+            
+            container.addEventListener('touchmove', e => {
+                if (e.touches.length === 1) {
+                    move(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            });
+            
             window.addEventListener('touchend', () => isDragging = false);
             
-            // Zoom with mouse wheel
-            container.addEventListener('wheel', (e) => {
+            container.addEventListener('wheel', e => {
                 e.preventDefault();
-                const zoomSpeed = 0.1;
-                const direction = e.deltaY > 0 ? -1 : 1;
-                currentZoom += direction * zoomSpeed;
-                currentZoom = Math.max(0.5, Math.min(3, currentZoom));
+                const delta = e.deltaY > 0 ? -1 : 1;
+                currentZoom += delta * 0.05;
+                currentZoom = Math.max(0.5, Math.min(2, currentZoom));
                 mainGroup.scale.set(currentZoom, currentZoom, currentZoom);
-                lastInt = Date.now();
+                lastInteraction = Date.now();
             }, { passive: false });
             
-            // Pinch to zoom on touch
-            let lastDistance = 0;
-            container.addEventListener('touchmove', (e) => {
-                if(e.touches.length === 2) {
-                    const dx = e.touches[0].clientX - e.touches[1].clientX;
-                    const dy = e.touches[0].clientY - e.touches[1].clientY;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if(lastDistance > 0) {
-                        const zoomSpeed = 0.005;
-                        currentZoom *= (1 + (distance - lastDistance) * zoomSpeed);
-                        currentZoom = Math.max(0.5, Math.min(3, currentZoom));
-                        mainGroup.scale.set(currentZoom, currentZoom, currentZoom);
-                        lastInt = Date.now();
-                    }
-                    lastDistance = distance;
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                
+                // Rebuild forecast bar on resize
+                if (forecastData.hourly.length > 0 || forecastData.daily.length > 0) {
+                    setTimeout(() => buildForecastBar(currentMode), 100);
                 }
-            }, { passive: false });
-            
-            container.addEventListener('touchend', () => {
-                lastDistance = 0;
             });
         }
 
