@@ -14,29 +14,8 @@
         #ui { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; display: flex; flex-direction: column; }
         
         .top-bar { padding: 70px 30px 0; display: flex; flex-direction: column; align-items: center; }
-        .menu-trigger { position: absolute; left: 30px; top: 55px; pointer-events: auto; cursor: pointer; opacity: 0.6; transition: opacity 0.3s; }
-        .menu-trigger:hover { opacity: 1; }
         .city { letter-spacing: 8px; font-size: 14px; font-weight: 600; opacity: 0.5; text-transform: uppercase; }
         .clock { font-size: 48px; font-weight: 400; margin-top: 8px; letter-spacing: -1px; }
-
-        /* Sidopanel - White Modular */
-        #side-panel {
-            position: absolute; left: -100%; top: 0; width: 100%; height: 100%;
-            background: rgba(245, 245, 247, 0.96); backdrop-filter: blur(25px);
-            z-index: 20; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            pointer-events: auto; padding: 100px 20px; display: grid;
-            grid-template-columns: 1fr 1fr; gap: 12px; align-content: start;
-        }
-        #side-panel.open { left: 0; }
-        .module { 
-            background: var(--card); border-radius: 24px; padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.04); 
-            text-align: left; border: 1px solid rgba(0,0,0,0.04);
-        }
-        .mod-label { font-size: 10px; font-weight: 300; opacity: 0.4; text-transform: uppercase; letter-spacing: 0.5px; }
-        .mod-val { font-size: 28px; font-weight: 300; margin-top: 10px; display: block; color: #1d1d1f; letter-spacing: -0.5px; }
-        #close-btn { position: absolute; top: 50px; right: 30px; font-weight: 300; font-size: 12px; opacity: 0.5; cursor: pointer; transition: opacity 0.2s; }
-        #close-btn:hover { opacity: 0.8; }
 
         /* Forecast - Compact Line from Video */
         .forecast-wrapper {
@@ -77,31 +56,7 @@
 
     <div id="bg-gradient"></div>
 
-    <div id="side-panel">
-        <div id="close-btn">STÄNG</div>
-        <div class="module">
-            <span class="mod-label">Luftfuktighet</span>
-            <span class="mod-val" id="d-hum">--%</span>
-        </div>
-        <div class="module">
-            <span class="mod-label">Vind</span>
-            <span class="mod-val" id="d-wind">-- m/s</span>
-        </div>
-        <div class="module">
-            <span class="mod-label">Sikt</span>
-            <span class="mod-val" id="d-vis">-- km</span>
-        </div>
-        <div class="module">
-            <span class="mod-label">Tryck</span>
-            <span class="mod-val" id="d-pres">-- hPa</span>
-        </div>
-    </div>
-
     <div id="ui">
-        <div class="menu-trigger">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="black"><rect y="6" width="20" height="2"/><rect y="12" width="24" height="2"/><rect y="18" width="16" height="2"/></svg>
-        </div>
-        
         <div class="top-bar">
             <div class="city" id="city-name">STOCKHOLM</div>
             <div class="clock" id="time-display">16:49</div>
@@ -207,10 +162,6 @@
                 const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
                 const data = await res.json();
                 document.getElementById('city-name').innerText = data.name.toUpperCase();
-                document.getElementById('d-hum').innerText = data.main.humidity + "%";
-                document.getElementById('d-wind').innerText = Math.round(data.wind.speed) + " m/s";
-                document.getElementById('d-vis').innerText = (data.visibility/1000).toFixed(1) + " km";
-                document.getElementById('d-pres').innerText = data.main.pressure + " hPa";
                 drawWeather(data.weather[0].main, Math.round(data.main.temp));
 
                 // Fetch hourly forecast using One Call (by lat/lon)
@@ -485,14 +436,6 @@
             
             container.addEventListener('touchend', () => {
                 lastDistance = 0;
-            });
-
-            // UI Toggles
-            document.querySelector('.menu-trigger').addEventListener('click', () => {
-                document.getElementById('side-panel').classList.add('open');
-            });
-            document.getElementById('close-btn').addEventListener('click', () => {
-                document.getElementById('side-panel').classList.remove('open');
             });
         }
 
