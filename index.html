@@ -522,47 +522,74 @@
                 }
             }
             
-            function handleStart(x) {
+            function handleStart(x, e) {
                 isDraggingSlider = true;
                 startX = x;
                 prevTranslate = currentTranslate;
                 slider.style.cursor = 'grabbing';
                 playTap();
+                if (e) e.stopPropagation(); // Prevent swipe handler from interfering
             }
             
-            function handleMove(x) {
+            function handleMove(x, e) {
                 if (!isDraggingSlider) return;
                 
                 const deltaX = x - startX;
                 currentTranslate = prevTranslate + deltaX;
                 const indexFloat = -(currentTranslate - centerOffset) / itemWidth;
                 updateSlider(indexFloat);
+                
+                if (e) e.stopPropagation(); // Prevent swipe handler from interfering
             }
             
-            function handleEnd() {
+            function handleEnd(e) {
                 isDraggingSlider = false;
                 slider.style.cursor = 'grab';
                 prevTranslate = centerOffset - (currentIndex * itemWidth);
                 currentTranslate = prevTranslate;
+                if (e) e.stopPropagation();
             }
             
+            // Mouse events
             slider.addEventListener('mousedown', e => {
                 e.preventDefault();
-                handleStart(e.clientX);
+                e.stopPropagation();
+                handleStart(e.clientX, e);
             });
             
-            window.addEventListener('mousemove', e => handleMove(e.clientX));
-            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('mousemove', e => {
+                if (isDraggingSlider) {
+                    e.preventDefault();
+                    handleMove(e.clientX, e);
+                }
+            });
             
+            window.addEventListener('mouseup', e => {
+                if (isDraggingSlider) {
+                    handleEnd(e);
+                }
+            });
+            
+            // Touch events with better handling
             slider.addEventListener('touchstart', e => {
-                handleStart(e.touches[0].clientX);
-            });
+                e.stopPropagation();
+                handleStart(e.touches[0].clientX, e);
+            }, { passive: false });
             
             slider.addEventListener('touchmove', e => {
-                handleMove(e.touches[0].clientX);
-            });
+                if (isDraggingSlider) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleMove(e.touches[0].clientX, e);
+                }
+            }, { passive: false });
             
-            slider.addEventListener('touchend', handleEnd);
+            slider.addEventListener('touchend', e => {
+                if (isDraggingSlider) {
+                    e.stopPropagation();
+                    handleEnd(e);
+                }
+            }, { passive: false });
             
             updateSlider(0);
         }
@@ -657,22 +684,32 @@
         // Swipe handling
         let swipeStartY = 0;
         let swipeStartX = 0;
+        let swipeStartTime = 0;
         const forecastArea = document.getElementById('forecast-area');
         
         forecastArea.addEventListener('touchstart', e => {
+            // Don't handle if touching the slider itself
+            if (e.target.closest('#pill-slider')) return;
+            
             swipeStartY = e.touches[0].clientY;
             swipeStartX = e.touches[0].clientX;
-        });
+            swipeStartTime = Date.now();
+        }, { passive: true });
         
         forecastArea.addEventListener('touchend', e => {
+            // Don't handle if touching the slider itself
+            if (e.target.closest('#pill-slider')) return;
+            
             const deltaY = e.changedTouches[0].clientY - swipeStartY;
             const deltaX = Math.abs(e.changedTouches[0].clientX - swipeStartX);
+            const deltaTime = Date.now() - swipeStartTime;
             
-            if (Math.abs(deltaY) > 50 && deltaX < 40) {
+            // Only trigger if it's a vertical swipe (not horizontal) and reasonably fast
+            if (Math.abs(deltaY) > 50 && deltaX < 40 && deltaTime < 500) {
                 playSwipe();
                 switchView(deltaY < 0 ? 'hourly' : 'daily');
             }
-        });
+        }, { passive: true });
 
         function animate3D() {
             requestAnimationFrame(animate3D);
