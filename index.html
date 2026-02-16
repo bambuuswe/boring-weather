@@ -77,11 +77,28 @@
 
     <div id="bg-gradient"></div>
 
-    <!-- Side panel removed -->
+    <div id="side-panel">
+        <div id="close-btn">STÄNG</div>
+        <div class="module">
+            <span class="mod-label">Luftfuktighet</span>
+            <span class="mod-val" id="d-hum">--%</span>
+        </div>
+        <div class="module">
+            <span class="mod-label">Vind</span>
+            <span class="mod-val" id="d-wind">-- m/s</span>
+        </div>
+        <div class="module">
+            <span class="mod-label">Sikt</span>
+            <span class="mod-val" id="d-vis">-- km</span>
+        </div>
+        <div class="module">
+            <span class="mod-label">Tryck</span>
+            <span class="mod-val" id="d-pres">-- hPa</span>
+        </div>
+    </div>
 
     <div id="ui">
-        <!-- Menu trigger removed (side panel deleted) -->
-        <div style="display:none;" class="menu-trigger">
+        <div class="menu-trigger">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="black"><rect y="6" width="20" height="2"/><rect y="12" width="24" height="2"/><rect y="18" width="16" height="2"/></svg>
         </div>
         
@@ -468,6 +485,14 @@
             
             container.addEventListener('touchend', () => {
                 lastDistance = 0;
+            });
+
+            // UI Toggles
+            document.querySelector('.menu-trigger').addEventListener('click', () => {
+                document.getElementById('side-panel').classList.add('open');
+            });
+            document.getElementById('close-btn').addEventListener('click', () => {
+                document.getElementById('side-panel').classList.remove('open');
             });
         }
 
