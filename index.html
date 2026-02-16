@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Not Boring Weather</title>
+    <style>
+        :root { --accent: #ff3333; --bg: #f5f5f7; --card: #ffffff; --bg-1: #fbfbfc; --bg-2: #f3f4f6; --bg-3: #eef0f2; --bg-shift-x: 0%; --bg-shift-y: 0%; --vignette-opacity: 0.03; }
+        body { margin: 0; overflow: hidden; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; color: #1d1d1f; user-select: none; -webkit-font-smoothing: antialiased; font-weight: 300; }
+
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; z-index: 1; }
+
+        /* UI */
+        #ui { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; display: flex; flex-direction: column; }
+        
+        .top-bar { padding: 70px 30px 0; display: flex; flex-direction: column; align-items: center; }
+        .menu-trigger { position: absolute; left: 30px; top: 55px; pointer-events: auto; cursor: pointer; opacity: 0.6; transition: opacity 0.3s; }
+        .menu-trigger:hover { opacity: 1; }
+        .city { letter-spacing: 8px; font-size: 14px; font-weight: 600; opacity: 0.5; text-transform: uppercase; }
+        .clock { font-size: 48px; font-weight: 400; margin-top: 8px; letter-spacing: -1px; }
+
+        /* Sidopanel - White Modular */
+        #side-panel {
+            position: absolute; left: -100%; top: 0; width: 100%; height: 100%;
+            background: rgba(245, 245, 247, 0.96); backdrop-filter: blur(25px);
+            z-index: 20; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto; padding: 100px 20px; display: grid;
+            grid-template-columns: 1fr 1fr; gap: 12px; align-content: start;
+        }
+        #side-panel.open { left: 0; }
+        .module { 
+            background: var(--card); border-radius: 24px; padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.04); 
+            text-align: left; border: 1px solid rgba(0,0,0,0.04);
+        }
+        .mod-label { font-size: 10px; font-weight: 300; opacity: 0.4; text-transform: uppercase; letter-spacing: 0.5px; }
+        .mod-val { font-size: 28px; font-weight: 300; margin-top: 10px; display: block; color: #1d1d1f; letter-spacing: -0.5px; }
+        #close-btn { position: absolute; top: 50px; right: 30px; font-weight: 300; font-size: 12px; opacity: 0.5; cursor: pointer; transition: opacity 0.2s; }
+        #close-btn:hover { opacity: 0.8; }
+
+        /* Forecast - Compact Line from Video */
+        .forecast-wrapper {
+            margin-top: auto; padding-bottom: 50px; pointer-events: auto;
+            overflow-x: auto; white-space: nowrap; width: 100%;
+        }
+        .forecast-wrapper::-webkit-scrollbar { height: 3px; }
+        .forecast-wrapper::-webkit-scrollbar-track { background: transparent; }
+        .forecast-wrapper::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.06); border-radius: 2px; }
+        .forecast-inner { display: inline-flex; padding: 0 30vw; gap: 18px; align-items: flex-end; }
+        .f-item { width: 64px; display: inline-flex; flex-direction: column; align-items: center; text-align: center; opacity: 0.28; transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; padding: 6px 4px; }
+        .f-item.active { opacity: 1; color: #1d1d1f; }
+        .f-item.active::after { content: ''; display: block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin: 8px auto 0; }
+        .f-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+        .f-icon img { width: 100%; height: 100%; object-fit: contain; opacity: 0.95; }
+        .f-time { font-size: 10px; font-weight: 300; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.6px; opacity: 0.6; }
+        .f-temp { font-size: 15px; font-weight: 300; letter-spacing: -0.4px; }
+
+        /* Background Gradient (dynamic via CSS variables) */
+        #bg-gradient {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
+            background-size: cover;
+            background-attachment: fixed;
+            transition: all 1.4s ease;
+        }
+        /* Soft vignette to ease the eyes */
+        #bg-gradient::after {
+            content: '';
+            position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(circle at 50% 80%, rgba(0,0,0,var(--vignette-opacity,0.03)), rgba(0,0,0,calc(var(--vignette-opacity,0.03) * 2)) 40%, rgba(0,0,0,0) 60%);
+            transition: opacity 1s ease, background 1s ease;
+            mix-blend-mode: multiply;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="bg-gradient"></div>
+
+    <!-- Side panel removed -->
+
+    <div id="ui">
+        <!-- Menu trigger removed (side panel deleted) -->
+        <div style="display:none;" class="menu-trigger">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="black"><rect y="6" width="20" height="2"/><rect y="12" width="24" height="2"/><rect y="18" width="16" height="2"/></svg>
+        </div>
+        
+        <div class="top-bar">
+            <div class="city" id="city-name">STOCKHOLM</div>
+            <div class="clock" id="time-display">16:49</div>
+        </div>
+
+        <div class="forecast-wrapper">
+            <div class="forecast-inner" id="forecast-row"></div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://threejs.org/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://threejs.org/examples/js/geometries/TextGeometry.js"></script>
+
+    <script>
+        const API_KEY = 'dd6a890cc06c02cacd3ad1ec55e98bc6';
+        let scene, camera, renderer, mainGroup;
+        let isDragging = false, lastInt = Date.now();
+        let currentZoom = 1;
+        let forecastHourly = [];
+
+        // Material for clean 3D text and weather elements with rough texture
+        function getWeatherMat() {
+            // Create grainy/rough texture canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            // Black background
+            ctx.fillStyle = '#5a5a5e';
+            ctx.fillRect(0, 0, 256, 256);
+            
+            // Add grainy noise texture
+            const imageData = ctx.getImageData(0, 0, 256, 256);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const noise = Math.random() * 40;
+                data[i] = Math.max(60, 90 - noise);      // R
+                data[i + 1] = Math.max(60, 90 - noise);  // G
+                data[i + 2] = Math.max(60, 94 - noise);  // B
+                data[i + 3] = 255;                       // A
+            }
+            ctx.putImageData(imageData, 0, 0);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.magFilter = THREE.LinearFilter;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            
+            return new THREE.MeshStandardMaterial({
+                map: tex,
+                bumpMap: tex,
+                bumpScale: 0.6,
+                roughness: 0.9,
+                metalness: 0.0,
+                color: 0x5a5a5e
+            });
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.set(0, 0, 50);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Professional lighting for clean 3D visualization
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const light = new THREE.DirectionalLight(0xffffff, 1.0);
+            light.position.set(15, 25, 20);
+            light.castShadow = true;
+            scene.add(light);
+            
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            fillLight.position.set(-10, -15, 10);
+            scene.add(fillLight);
+
+            mainGroup = new THREE.Group();
+            scene.add(mainGroup);
+
+            setupEvents();
+            
+            new THREE.FontLoader().load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', f => {
+                window.myFont = f;
+                // Now fetch data AFTER font is loaded
+                fetchData();
+                animate();
+                animateBackgroundLoop();
+                // Set initial colorful background before API loads
+                setDynamicBackground('Clear', Math.floor(Date.now() / 1000), 0, false);
+            });
+        }
+
+        async function fetchWeatherByCoords(lat, lon) {
+            // Current weather using coordinates
+            try {
+                const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`);
+                const data = await res.json();
+                document.getElementById('city-name').innerText = data.name.toUpperCase();
+                document.getElementById('d-hum').innerText = data.main.humidity + "%";
+                document.getElementById('d-wind').innerText = Math.round(data.wind.speed) + " m/s";
+                document.getElementById('d-vis').innerText = (data.visibility/1000).toFixed(1) + " km";
+                document.getElementById('d-pres').innerText = data.main.pressure + " hPa";
+                drawWeather(data.weather[0].main, Math.round(data.main.temp));
+
+                // Fetch hourly forecast using One Call (by lat/lon)
+                const onecall = await fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,daily,alerts&units=metric&appid=${API_KEY}`);
+                const fc = await onecall.json();
+                forecastHourly = (fc.hourly || []).slice(0, 24);
+                buildForecast(forecastHourly);
+                // Set dynamic background using One Call current conditions
+                if(fc.current && fc.current.weather && fc.current.weather[0]) {
+                    setDynamicBackground(fc.current.weather[0].main, fc.current.dt, fc.timezone_offset);
+                } else if(forecastHourly.length) {
+                    setDynamicBackground(forecastHourly[0].weather[0].main, forecastHourly[0].dt, fc.timezone_offset);
+                }
+            } catch (err) {
+                console.error('Weather fetch error', err);
+            }
+        }
+
+        async function fetchData() {
+            // Try to get user's location, fallback to Stockholm
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        fetchWeatherByCoords(lat, lon);
+                    },
+                    (error) => {
+                        console.log('Geolocation denied, using Stockholm fallback');
+                        fetchWeatherByCoords(59.3293, 18.0686);
+                    }
+                );
+            } else {
+                // Fallback for browsers without geolocation support
+                fetchWeatherByCoords(59.3293, 18.0686);
+            }
+        }
+
+        function drawWeather(type, temp) {
+            while(mainGroup.children.length > 0) mainGroup.remove(mainGroup.children[0]);
+            if(!window.myFont) return;
+
+            const mat = getWeatherMat();
+            
+            // Cloud at top
+            const cloud = new THREE.Group();
+            const geo = new THREE.SphereGeometry(2.5, 32, 32);
+            [[0,0,0,1.3], [-3.2,-0.4,0.6,0.95], [3.2,0.3,-0.6,1.05]].forEach(p => {
+                const m = new THREE.Mesh(geo, mat);
+                m.position.set(p[0], p[1], p[2]); 
+                m.scale.set(p[3], p[3], p[3]);
+                cloud.add(m);
+            });
+            cloud.position.y = 12;
+            mainGroup.add(cloud);
+
+            // Temperature number in middle - thin weight
+            const tGeo = new THREE.TextGeometry(temp + "°", { 
+                font: window.myFont, 
+                size: 11, 
+                height: 1.8, 
+                bevelEnabled: false,
+                curveSegments: 16
+            });
+            tGeo.center();
+            const text = new THREE.Mesh(tGeo, mat);
+            text.position.y = 0;
+            mainGroup.add(text);
+
+            // Weather condition text at bottom - thin
+            const wGeo = new THREE.TextGeometry(type.toUpperCase(), { 
+                font: window.myFont, 
+                size: 2.8, 
+                height: 1.2,
+                bevelEnabled: false,
+                curveSegments: 12
+            });
+            wGeo.center();
+            const wText = new THREE.Mesh(wGeo, mat);
+            wText.position.y = -12;
+            mainGroup.add(wText);
+        }
+
+        // ---------- Dynamic background helpers ----------
+        function hexToRgb(hex) {
+            const h = hex.replace('#','');
+            return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)];
+        }
+
+        function rgbToHex(r,g,b) {
+            return '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+        }
+
+        function lerp(a,b,t) { return a + (b-a) * t; }
+
+        function mixGradient(c1, c2, t) {
+            const a = hexToRgb(c1), b = hexToRgb(c2);
+            return rgbToHex(lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t));
+        }
+
+        function setDynamicBackground(condition, timestamp, tzOffset, smooth = true) {
+            // tzOffset in seconds
+            const local = new Date((timestamp + (tzOffset||0)) * 1000);
+            const hour = local.getUTCHours();
+            const isDay = hour >= 6 && hour < 19;
+
+            // Map basic conditions to palettes - RICH DAY, DARK NIGHT
+            const palettes = {
+                Clear: isDay ? ['#ffd966', '#ffb347'] : ['#0f1920', '#1a2a3a'],
+                Clouds: isDay ? ['#b8d4f1', '#a8c8e1'] : ['#1a2a3a', '#2a3a4a'],
+                Rain: isDay ? ['#9ecbf0', '#7fb3e0'] : ['#0f1f2f', '#1a2f3f'],
+                Drizzle: isDay ? ['#b0d9ff', '#90ccff'] : ['#1a3050', '#2a4060'],
+                Thunderstorm: isDay ? ['#9ba8d8', '#7a8bc8'] : ['#050a15', '#151f2a'],
+                Snow: isDay ? ['#d4e8ff', '#c4deff'] : ['#1a2a40', '#2a3a50'],
+                Mist: isDay ? ['#c0d8f0', '#b0cce0'] : ['#2a3a50', '#3a4a60'],
+                Smoke: isDay ? ['#d4c4b0', '#c0b0a0'] : ['#1a1a20', '#2a2a30']
+            };
+
+            const key = palettes[condition] ? condition : 'Clouds';
+            const p = palettes[key];
+
+            const colorA = p[0];
+            const colorB = p[1] || p[0];
+
+            // Use smooth transition for color change
+            transitionBackground(colorA, colorB, 1400);
+            // Stronger vignette at night for mood
+            document.documentElement.style.setProperty('--vignette-opacity', isDay ? '0.01' : '0.12');
+        }
+
+        // Smoothly tween between current CSS gradient colors and target colors
+        let _bgTween = null;
+        function transitionBackground(targetA, targetB, duration = 1200) {
+            if(_bgTween && _bgTween.cancel) _bgTween.cancel();
+            const root = document.documentElement;
+            const computed = getComputedStyle(root);
+            const fromA = (computed.getPropertyValue('--bg-1') || '#fbfbfc').trim();
+            const fromB = (computed.getPropertyValue('--bg-2') || '#f3f4f6').trim();
+
+            let start = null;
+            let raf = null;
+            _bgTween = {
+                cancel() { if(raf) cancelAnimationFrame(raf); _bgTween = null; }
+            };
+
+            function step(now) {
+                if(!start) start = now;
+                const t = Math.min(1, (now - start) / duration);
+                // parse and lerp
+                const a1 = hexToRgb(fromA), b1 = hexToRgb(targetA);
+                const a2 = hexToRgb(fromB), b2 = hexToRgb(targetB);
+                const curA = rgbToHex(lerp(a1[0], b1[0], t), lerp(a1[1], b1[1], t), lerp(a1[2], b1[2], t));
+                const curB = rgbToHex(lerp(a2[0], b2[0], t), lerp(a2[1], b2[1], t), lerp(a2[2], b2[2], t));
+                root.style.setProperty('--bg-1', curA);
+                root.style.setProperty('--bg-2', curB);
+                if(t < 1) raf = requestAnimationFrame(step);
+                else _bgTween = null;
+            }
+            raf = requestAnimationFrame(step);
+            return _bgTween;
+        }
+
+        // Continuous subtle motion of background position to feel alive
+        let _bgLoopRunning = false;
+        function animateBackgroundLoop() {
+            if(_bgLoopRunning) return;
+            _bgLoopRunning = true;
+            const el = document.getElementById('bg-gradient');
+            let start = performance.now();
+            function loop(now) {
+                const t = (now - start) / 1000;
+                const x = 50 + Math.sin(t * 0.06) * 8; // slow horizontal sway
+                const y = 50 + Math.cos(t * 0.04) * 4; // slow vertical bob
+                el.style.backgroundPosition = `${x}% ${y}%`;
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function buildForecast(hourly) {
+            const row = document.getElementById('forecast-row');
+            row.innerHTML = "";
+            if(!hourly || !hourly.length) return;
+            hourly.forEach((h, i) => {
+                const item = document.createElement('div');
+                item.className = `f-item ${i===0 ? 'active' : ''}`;
+                const date = new Date(h.dt * 1000);
+                const displayHour = String(date.getHours()).padStart(2, '0');
+                const temp = Math.round(h.temp);
+                const icon = h.weather && h.weather[0] ? h.weather[0].icon : '';
+                item.innerHTML = `
+                    <div class="f-icon"><img src="https://openweathermap.org/img/wn/${icon}.png" alt=""/></div>
+                    <div class="f-time">${displayHour}:00</div>
+                    <div class="f-temp">${temp}°</div>
+                `;
+                item.onclick = () => {
+                    document.querySelectorAll('.f-item').forEach(el => el.classList.remove('active'));
+                    item.classList.add('active');
+                    // show that hour's condition on main view
+                    if(h.weather && h.weather[0]) {
+                        drawWeather(h.weather[0].main, temp);
+                    }
+                };
+                row.appendChild(item);
+            });
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('time-display').innerText = `${hours}:${minutes}`;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateClock();
+            if(!isDragging && Date.now() - lastInt > 2000) {
+                mainGroup.rotation.y *= 0.99;
+                mainGroup.rotation.x *= 0.99;
+            }
+            renderer.render(scene, camera);
+        }
+
+        function setupEvents() {
+            let prev = { x: 0, y: 0 };
+            const container = document.getElementById('canvas-container');
+            const start = (x, y) => { isDragging = true; prev = { x, y }; };
+            const move = (x, y) => {
+                if(!isDragging) return;
+                mainGroup.rotation.y += (x - prev.x) * 0.01;
+                mainGroup.rotation.x += (y - prev.y) * 0.01;
+                prev = { x, y };
+                lastInt = Date.now();
+            };
+            container.addEventListener('mousedown', e => start(e.clientX, e.clientY));
+            window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+            window.addEventListener('mouseup', () => isDragging = false);
+            container.addEventListener('touchstart', e => start(e.touches[0].clientX, e.touches[0].clientY));
+            container.addEventListener('touchmove', e => move(e.touches[0].clientX, e.touches[0].clientY));
+            window.addEventListener('touchend', () => isDragging = false);
+            
+            // Zoom with mouse wheel
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSpeed = 0.1;
+                const direction = e.deltaY > 0 ? -1 : 1;
+                currentZoom += direction * zoomSpeed;
+                currentZoom = Math.max(0.5, Math.min(3, currentZoom));
+                mainGroup.scale.set(currentZoom, currentZoom, currentZoom);
+                lastInt = Date.now();
+            }, { passive: false });
+            
+            // Pinch to zoom on touch
+            let lastDistance = 0;
+            container.addEventListener('touchmove', (e) => {
+                if(e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if(lastDistance > 0) {
+                        const zoomSpeed = 0.005;
+                        currentZoom *= (1 + (distance - lastDistance) * zoomSpeed);
+                        currentZoom = Math.max(0.5, Math.min(3, currentZoom));
+                        mainGroup.scale.set(currentZoom, currentZoom, currentZoom);
+                        lastInt = Date.now();
+                    }
+                    lastDistance = distance;
+                }
+            }, { passive: false });
+            
+            container.addEventListener('touchend', () => {
+                lastDistance = 0;
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
