@@ -463,40 +463,197 @@ window.addEventListener('mouseup', ()=>gEnd());
 let scene,cam,ren,grp;
 let d3=false,lastAct=Date.now(),z3=1,font3=null;
 
-function mat3() {
+function mat3(colorHex, grain=35) {
     const cv=document.createElement('canvas'); cv.width=cv.height=512;
     const cx=cv.getContext('2d');
-    cx.fillStyle='#3a3a40'; cx.fillRect(0,0,512,512);
+    const r=(colorHex>>16)&255, g=(colorHex>>8)&255, b=colorHex&255;
+    cx.fillStyle=`rgb(${r},${g},${b})`; cx.fillRect(0,0,512,512);
     const id=cx.getImageData(0,0,512,512);
     for(let i=0;i<id.data.length;i+=4){
-        const n=(Math.random()-.5)*35;
-        id.data[i]=id.data[i+1]=Math.max(0,Math.min(255,58+n));
-        id.data[i+2]=Math.max(0,Math.min(255,64+n)); id.data[i+3]=255;
+        const n=(Math.random()-.5)*grain;
+        id.data[i]=Math.max(0,Math.min(255,r+n));
+        id.data[i+1]=Math.max(0,Math.min(255,g+n));
+        id.data[i+2]=Math.max(0,Math.min(255,b+n));
+        id.data[i+3]=255;
     }
     cx.putImageData(id,0,0);
     const tex=new THREE.CanvasTexture(cv);
-    return new THREE.MeshStandardMaterial({map:tex,roughness:.95,metalness:.05,bumpMap:tex,bumpScale:.4,color:0x3a3a40});
+    return new THREE.MeshStandardMaterial({map:tex,roughness:.92,metalness:.05,bumpMap:tex,bumpScale:.5,color:colorHex});
 }
 
+function sphere(r,mat,x=0,y=0,z=0){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,32,32),mat);
+    m.position.set(x,y,z); m.castShadow=true; return m;
+}
+function box(w,h,d,mat,x=0,y=0,z=0){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; return m;
+}
+function cyl(rt,rb,h,mat,x=0,y=0,z=0){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,32),mat);
+    m.position.set(x,y,z); m.castShadow=true; return m;
+}
+
+// ── Weather shape builders ────────────────────────────────────────────────────
+function makeCloud(m) {
+    const g=new THREE.Group();
+    [{x:0,y:0,z:0,r:5},{x:-4.5,y:0,z:-.5,r:4},{x:4.5,y:0,z:-.5,r:4},
+     {x:-2,y:3.2,z:0,r:3.5},{x:2,y:3.2,z:0,r:3.5},
+     {x:-6.5,y:-1,z:.5,r:2.2},{x:6.5,y:-1,z:.5,r:2.2}]
+    .forEach(p=>g.add(sphere(p.r,m,p.x,p.y,p.z)));
+    return g;
+}
+
+function makeSun(m) {
+    const g=new THREE.Group();
+    // Main disc
+    g.add(sphere(5.5,m));
+    // Rays
+    for(let i=0;i<8;i++){
+        const angle=i*(Math.PI/4);
+        const ray=new THREE.Mesh(new THREE.CylinderGeometry(.5,.7,3.5,12),m);
+        ray.position.set(Math.cos(angle)*8.5, Math.sin(angle)*8.5, 0);
+        ray.rotation.z = angle + Math.PI/2;
+        ray.castShadow=true;
+        g.add(ray);
+    }
+    return g;
+}
+
+function makePartlyCloud(mSun, mCloud) {
+    const g=new THREE.Group();
+    // Sun peeking behind
+    const sun=new THREE.Group();
+    sun.add(sphere(4,mSun));
+    for(let i=0;i<6;i++){
+        const a=i*(Math.PI/3);
+        const ray=new THREE.Mesh(new THREE.CylinderGeometry(.4,.5,2.5,10),mSun);
+        ray.position.set(Math.cos(a)*6.5, Math.sin(a)*6.5, -1);
+        ray.rotation.z=a+Math.PI/2; ray.castShadow=true; sun.add(ray);
+    }
+    sun.position.set(3,3,-.5); g.add(sun);
+    // Small cloud in front
+    const cl=new THREE.Group();
+    [{x:0,y:0,z:0,r:3.8},{x:-3.2,y:.3,z:-.3,r:3},{x:3.2,y:.3,z:-.3,r:3},
+     {x:-1.5,y:2.4,z:0,r:2.6},{x:1.5,y:2.4,z:0,r:2.6}]
+    .forEach(p=>cl.add(sphere(p.r,mCloud,p.x,p.y,p.z)));
+    cl.position.set(-2,-2,1); g.add(cl);
+    return g;
+}
+
+function makeRain(mCloud, mRain) {
+    const g=new THREE.Group();
+    const cl=makeCloud(mCloud);
+    cl.position.set(0,3,0); g.add(cl);
+    // Raindrops
+    const drops=[[-.3,0],[2.5,-.3],[-2,-.5],[1,-1],[-.5,-1.5],[2,-1.8],[-2.5,-1.2]];
+    drops.forEach(([ox,oy])=>{
+        const drop=cyl(.18,.1,2.2,mRain,ox,-4+oy,0);
+        drop.rotation.z=.08; g.add(drop);
+    });
+    return g;
+}
+
+function makeSnow(mCloud, mSnow) {
+    const g=new THREE.Group();
+    const cl=makeCloud(mCloud);
+    cl.position.set(0,3,0); g.add(cl);
+    // Snowflakes as small spheres
+    const flakes=[[0,-4.5],[2.2,-3.8],[-2,-4.2],[1.2,-5.5],[-1.5,-5],[2.8,-5.2],[-2.8,-3.5]];
+    flakes.forEach(([ox,oy])=>{
+        g.add(sphere(.55,mSnow,ox,oy,0));
+        g.add(sphere(.35,mSnow,ox+.7,oy-.4,0));
+        g.add(sphere(.35,mSnow,ox-.7,oy-.4,0));
+    });
+    return g;
+}
+
+function makeThunder(mCloud, mBolt) {
+    const g=new THREE.Group();
+    const cl=makeCloud(mCloud);
+    cl.position.set(0,3,0); g.add(cl);
+    // Lightning bolt shape from boxes
+    const boltParts=[
+        {x:.5,y:-1.5,w:1.2,h:2.5,rot:.15},
+        {x:-.5,y:-4,w:1.2,h:2.5,rot:.15},
+    ];
+    boltParts.forEach(p=>{
+        const b=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,.6),mBolt);
+        b.position.set(p.x,p.y,0); b.rotation.z=p.rot; b.castShadow=true; g.add(b);
+    });
+    return g;
+}
+
+function makeMist(mMist) {
+    const g=new THREE.Group();
+    // Horizontal streaks
+    [[-2,3.5,0],[2,1.5,0],[-3,-.5,0],[1,-2,0],[-1,-4,0]].forEach(([x,y,z])=>{
+        const streak=new THREE.Mesh(new THREE.CylinderGeometry(1,.8,9,12),mMist);
+        streak.rotation.z=Math.PI/2; streak.position.set(x,y,z); streak.castShadow=true; g.add(streak);
+    });
+    return g;
+}
+
+// ── Main build3D ─────────────────────────────────────────────────────────────
 function build3D(cond, temp) {
     if(!grp||!font3) return;
     while(grp.children.length) grp.remove(grp.children[0]);
-    const m=mat3();
-    // Cloud spheres
-    const cl=new THREE.Group();
-    [{x:0,y:0,z:0,r:5},{x:-4.5,y:0,z:-1,r:4},{x:4.5,y:0,z:-1,r:4},
-     {x:-2,y:3,z:0,r:3.5},{x:2,y:3,z:0,r:3.5},{x:-6,y:-1,z:1,r:2},{x:6,y:-1,z:1,r:2}]
-    .forEach(p=>{const s=new THREE.Mesh(new THREE.SphereGeometry(p.r,32,32),m);s.position.set(p.x,p.y,p.z);s.castShadow=true;cl.add(s);});
-    cl.position.set(0,5,0); grp.add(cl);
-    // Number
-    const tg=new THREE.TextGeometry(String(temp),{font:font3,size:14,height:3,curveSegments:12,bevelEnabled:true,bevelThickness:.3,bevelSize:.2,bevelSegments:5});
-    tg.center(); const tm=new THREE.Mesh(tg,m); tm.position.set(0,-8,0); grp.add(tm);
-    // Degree
+
+    const C = cond.toLowerCase();
+
+    // Pick material colors per condition
+    let shape;
+    if (C.includes('clear') || C.includes('sunny')) {
+        const mSun = mat3(0x4a3a20, 40); // warm golden-brown
+        shape = makeSun(mSun);
+    } else if (C.includes('few clouds') || C.includes('partly')) {
+        const mSun   = mat3(0x4a3a20, 38);
+        const mCloud = mat3(0x3a3a40, 35);
+        shape = makePartlyCloud(mSun, mCloud);
+    } else if (C.includes('thunder') || C.includes('storm')) {
+        const mCloud = mat3(0x252530, 30);
+        const mBolt  = mat3(0x4a4a20, 45); // yellowish bolt
+        shape = makeThunder(mCloud, mBolt);
+    } else if (C.includes('drizzle') || C.includes('rain')) {
+        const mCloud = mat3(0x2e2e38, 30);
+        const mRain  = mat3(0x203040, 25);
+        shape = makeRain(mCloud, mRain);
+    } else if (C.includes('snow') || C.includes('sleet') || C.includes('blizzard')) {
+        const mCloud = mat3(0x353540, 28);
+        const mSnow  = mat3(0x4a4a55, 20);
+        shape = makeSnow(mCloud, mSnow);
+    } else if (C.includes('mist') || C.includes('fog') || C.includes('haze') || C.includes('smoke') || C.includes('dust') || C.includes('sand')) {
+        const mMist  = mat3(0x303038, 22);
+        shape = makeMist(mMist);
+    } else {
+        // Default: cloud
+        const mCloud = mat3(0x3a3a40, 35);
+        shape = makeCloud(mCloud);
+    }
+
+    shape.position.set(0, 5, 0);
+    grp.add(shape);
+
+    // ── Temperature number
+    const m = mat3(0x3a3a40, 35);
+    const tg=new THREE.TextGeometry(String(temp),{
+        font:font3,size:14,height:3,curveSegments:12,
+        bevelEnabled:true,bevelThickness:.3,bevelSize:.2,bevelSegments:5
+    });
+    tg.center();
+    const tm=new THREE.Mesh(tg,m); tm.position.set(0,-8,0); tm.castShadow=true; grp.add(tm);
+
+    // ── Degree symbol
     const dg=new THREE.TextGeometry('°',{font:font3,size:6,height:2,curveSegments:12,bevelEnabled:true,bevelThickness:.2,bevelSize:.1,bevelSegments:5});
     const dm=new THREE.Mesh(dg,m); dm.position.set(11,-5,0); grp.add(dm);
-    // Condition
-    const cg=new THREE.TextGeometry(cond.toUpperCase(),{font:font3,size:4,height:1.5,curveSegments:8,bevelEnabled:true,bevelThickness:.15,bevelSize:.1,bevelSegments:3});
-    cg.center(); const cm=new THREE.Mesh(cg,m); cm.position.set(0,-18,0); grp.add(cm);
+
+    // ── Condition text
+    const cg=new THREE.TextGeometry(cond.toUpperCase(),{
+        font:font3,size:4,height:1.5,curveSegments:8,
+        bevelEnabled:true,bevelThickness:.15,bevelSize:.1,bevelSegments:3
+    });
+    cg.center();
+    const cm=new THREE.Mesh(cg,m); cm.position.set(0,-18,0); cm.castShadow=true; grp.add(cm);
 }
 
 function init3D() {
