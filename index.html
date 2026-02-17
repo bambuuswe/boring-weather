@@ -28,7 +28,7 @@
             font-size:11px; font-weight:700;
             letter-spacing:6px; opacity:.45; text-transform:uppercase;
         }
-        #spacer { flex:1; }
+        #spacer { flex:1; max-height:42vh; }
         #condition {
             text-align:center; font-size:32px; font-weight:700;
             letter-spacing:-.5px; margin-bottom:14px;
@@ -631,7 +631,7 @@ function build3D(cond, temp) {
         shape = makeCloud(mCloud);
     }
 
-    shape.position.set(0, 5, 0);
+    shape.position.set(0, 8, 0);
     grp.add(shape);
 
     // ── Temperature number
@@ -660,7 +660,7 @@ function init3D() {
     const cv=document.getElementById('canvas3d');
     scene=new THREE.Scene();
     cam=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,1,1000);
-    cam.position.set(0,5,65);
+    cam.position.set(0,12,65);
     ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
     ren.setSize(innerWidth,innerHeight);
     ren.setPixelRatio(Math.min(devicePixelRatio,2));
