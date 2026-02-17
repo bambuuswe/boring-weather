@@ -24,13 +24,14 @@
         }
         .city {
             text-align:center;
-            padding-top:max(58px, env(safe-area-inset-top, 0px) + 20px);
+            padding-top:max(54px, env(safe-area-inset-top, 0px) + 18px);
             font-size:11px; font-weight:700;
             letter-spacing:6px; opacity:.45; text-transform:uppercase;
         }
+        #spacer { flex:1; }
         #condition {
             text-align:center; font-size:32px; font-weight:700;
-            letter-spacing:-.5px; margin-top:auto; margin-bottom:16px;
+            letter-spacing:-.5px; margin-bottom:14px;
             padding:0 24px; min-height:40px;
         }
         #fc {
@@ -40,13 +41,14 @@
         #hint {
             text-align:center; font-size:9px; letter-spacing:2px;
             opacity:.25; text-transform:uppercase; font-weight:600;
-            padding: 10px 0 max(28px, env(safe-area-inset-bottom, 0px) + 12px);
+            padding: 8px 0 max(26px, env(safe-area-inset-bottom, 0px) + 10px);
         }
     </style>
 </head>
 <body>
 <div id="overlay">
     <div class="city" id="city">GRÖDINGE</div>
+    <div id="spacer"></div>
     <div id="condition"></div>
     <canvas id="fc"></canvas>
     <div id="hint">DAILY  ·  DRAG ↕ TO ZOOM</div>
@@ -63,7 +65,7 @@
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 const KEY = 'dd6a890cc06c02cacd3ad1ec55e98bc6';
-const CH  = 148; // forecast canvas height
+const CH  = 170; // forecast canvas height - taller so content fits
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA STATE
@@ -260,18 +262,20 @@ function draw() {
     const isH   = zoom > .5;
     const PAD   = 16;
     const pX=PAD, pY=4, pW=W-PAD*2, pH=H-36;
-    const pillR  = pH/2;
+    const pillR  = 22; // fixed radius, not half-height
 
-    // ── Background pill
+    // ── Background pill — always dark
     drawPill(pX, pY, pW, pH, pillR);
-    // interpolate from dark-subtle (daily) to light grey (hourly)
-    const alpha = .06 + zoom * .86;
-    if (isH) {
-        ctx.fillStyle = `rgba(215,215,220,${alpha})`;
-    } else {
-        ctx.fillStyle = `rgba(255,255,255,.07)`;
-    }
+    ctx.fillStyle = isH
+        ? `rgba(38,38,44,0.96)`     // dark hourly
+        : `rgba(30,30,36,0.92)`;    // dark daily
     ctx.fill();
+
+    // subtle border
+    drawPill(pX, pY, pW, pH, pillR);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
     // ── Clip inside pill
     ctx.save();
@@ -282,8 +286,16 @@ function draw() {
     const temps  = data.map(getTemp);
     const minT   = Math.min(...temps), maxT = Math.max(...temps);
     const tRng   = Math.max(maxT-minT, 1);
-    const cTop   = pY+28, cBot = pY+pH-32, cH = cBot-cTop;
-    const ty     = t => cBot - ((t-minT)/tRng)*cH;
+
+    // Layout zones inside pill
+    const iconZoneTop = pY + 10;
+    const iconZoneH   = 36;
+    const curveTop    = pY + iconZoneH + 14;
+    const curveBot    = pY + pH - 38;
+    const cH          = Math.max(curveBot - curveTop, 10);
+    const tempZoneY   = pY + pH - 34;
+
+    const ty = t => curveBot - ((t-minT)/tRng)*cH;
 
     // ── Temperature curve
     ctx.beginPath();
@@ -291,50 +303,50 @@ function draw() {
         const x=colX(i), y=ty(getTemp(d));
         i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     });
-    ctx.strokeStyle = isH ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.3)';
-    ctx.lineWidth=2; ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth=1.5; ctx.lineJoin='round'; ctx.lineCap='round';
     ctx.stroke();
 
     const ci = centerIdx();
 
     data.forEach((d,i)=>{
         const x = colX(i);
-        if (x < pX-colW()*1.5 || x > pX+pW+colW()*1.5) return;
+        if (x < pX - colW()*1.5 || x > pX + pW + colW()*1.5) return;
 
         const t    = getTemp(d);
         const y    = ty(t);
         const dist = Math.abs(i-ci);
-        const fade = Math.max(.12, 1-dist*.35);
+        const fade = Math.max(.15, 1 - dist * 0.32);
 
-        // Dot
+        // Dot on curve
         ctx.beginPath();
-        ctx.arc(x, y, dist===0?4:2.5, 0, Math.PI*2);
-        ctx.fillStyle = isH ? `rgba(0,0,0,${dist===0?.7:.3})` : `rgba(255,255,255,${dist===0?.9:.4})`;
+        ctx.arc(x, y, dist===0 ? 4 : 2.5, 0, Math.PI*2);
+        ctx.fillStyle = dist===0 ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.3)';
         ctx.fill();
 
-        // Icon
+        // Icon above curve
         const img = getIcon(d.icon);
-        const sz  = isH ? 36 : 26;
+        const sz  = dist===0 ? 40 : 32;
         if (img) {
             ctx.globalAlpha = fade;
-            ctx.drawImage(img, x-sz/2, y-sz-4, sz, sz);
+            ctx.drawImage(img, x - sz/2, y - sz - 6, sz, sz);
             ctx.globalAlpha = 1;
         }
 
-        // Temperature
+        // Temperature below curve
         ctx.globalAlpha = fade;
-        const sz2 = isH ? (dist===0?30:22) : (dist===0?20:16);
-        ctx.font = `bold ${sz2}px -apple-system,sans-serif`;
-        ctx.fillStyle  = isH ? 'rgba(0,0,0,.9)' : 'rgba(255,255,255,.9)';
+        const fSize = dist===0 ? (isH?28:20) : (isH?20:16);
+        ctx.font = `bold ${fSize}px -apple-system,sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,.95)';
         ctx.textAlign  = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(`${Math.round(t)}°`, x, cBot+4);
+        ctx.fillText(`${Math.round(t)}°`, x, tempZoneY);
 
-        // Low temp (only in daily mode)
+        // Low temp in daily mode
         if (!isH && d.low != null) {
-            ctx.font = `500 ${dist===0?14:12}px -apple-system,sans-serif`;
-            ctx.fillStyle = 'rgba(255,255,255,.4)';
-            ctx.fillText(`${d.low}°`, x, cBot+4+(dist===0?22:18));
+            ctx.font = `500 ${dist===0?13:11}px -apple-system,sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,.35)';
+            ctx.fillText(`${d.low}°`, x, tempZoneY + (dist===0?20:16));
         }
 
         ctx.globalAlpha = 1;
@@ -345,12 +357,12 @@ function draw() {
     // ── Time labels below pill
     data.forEach((d,i)=>{
         const x = colX(i);
-        if (x < PAD-colW() || x > W-PAD+colW()) return;
+        if (x < PAD - colW() || x > W - PAD + colW()) return;
         const dist = Math.abs(i-ci);
-        const fade = Math.max(.2, 1-dist*.28);
+        const fade = Math.max(.2, 1 - dist * 0.28);
         const date = new Date(d.dt*1000);
         let lbl;
-        if (zoom>.5) {
+        if (zoom > .5) {
             lbl = i===0 ? 'NOW' : String(date.getHours()).padStart(2,'0');
         } else {
             lbl = i===0 ? 'TODAY' : date.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase();
@@ -360,7 +372,7 @@ function draw() {
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(lbl, x, pY+pH+7);
+        ctx.fillText(lbl, x, pY + pH + 7);
         ctx.globalAlpha = 1;
     });
 }
@@ -491,7 +503,7 @@ function init3D() {
     const cv=document.getElementById('canvas3d');
     scene=new THREE.Scene();
     cam=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,1,1000);
-    cam.position.set(0,0,65);
+    cam.position.set(0,5,65);
     ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
     ren.setSize(innerWidth,innerHeight);
     ren.setPixelRatio(Math.min(devicePixelRatio,2));
