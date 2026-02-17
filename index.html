@@ -28,7 +28,7 @@
             font-size:11px; font-weight:700;
             letter-spacing:6px; opacity:.45; text-transform:uppercase;
         }
-        #spacer { flex:1; max-height:42vh; }
+        #spacer { flex:1; max-height:30vh; }
         #condition {
             text-align:center; font-size:32px; font-weight:700;
             letter-spacing:-.5px; margin-bottom:14px;
@@ -631,7 +631,7 @@ function build3D(cond, temp) {
         shape = makeCloud(mCloud);
     }
 
-    shape.position.set(0, 8, 0);
+    shape.position.set(0, 14, 0);
     grp.add(shape);
 
     // ── Temperature number
@@ -641,11 +641,11 @@ function build3D(cond, temp) {
         bevelEnabled:true,bevelThickness:.3,bevelSize:.2,bevelSegments:5
     });
     tg.center();
-    const tm=new THREE.Mesh(tg,m); tm.position.set(0,-8,0); tm.castShadow=true; grp.add(tm);
+    const tm=new THREE.Mesh(tg,m); tm.position.set(0,2,0); tm.castShadow=true; grp.add(tm);
 
     // ── Degree symbol
     const dg=new THREE.TextGeometry('°',{font:font3,size:6,height:2,curveSegments:12,bevelEnabled:true,bevelThickness:.2,bevelSize:.1,bevelSegments:5});
-    const dm=new THREE.Mesh(dg,m); dm.position.set(11,-5,0); grp.add(dm);
+    const dm=new THREE.Mesh(dg,m); dm.position.set(11,5,0); grp.add(dm);
 
     // ── Condition text
     const cg=new THREE.TextGeometry(cond.toUpperCase(),{
@@ -653,14 +653,14 @@ function build3D(cond, temp) {
         bevelEnabled:true,bevelThickness:.15,bevelSize:.1,bevelSegments:3
     });
     cg.center();
-    const cm=new THREE.Mesh(cg,m); cm.position.set(0,-18,0); cm.castShadow=true; grp.add(cm);
+    const cm=new THREE.Mesh(cg,m); cm.position.set(0,-8,0); cm.castShadow=true; grp.add(cm);
 }
 
 function init3D() {
     const cv=document.getElementById('canvas3d');
     scene=new THREE.Scene();
     cam=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,1,1000);
-    cam.position.set(0,12,65);
+    cam.position.set(0,0,65);
     ren=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
     ren.setSize(innerWidth,innerHeight);
     ren.setPixelRatio(Math.min(devicePixelRatio,2));
